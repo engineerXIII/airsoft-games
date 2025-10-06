@@ -1,5 +1,30 @@
-#include <LiquidCrystal_I2C.h>
-LiquidCrystal_I2C lcd(0x3F, 16, 2);
+#include "FastUtils.h"
+#define _LCD_TYPE 1
+#include <LCD_1602_RUS_ALL.h>
+#include <font_LCD_1602_RUS.h>
+LCD_1602_RUS lcd(0x3F, 16, 2);
+
+//#include <LiquidCrystal_I2C.h>
+//LiquidCrystal_I2C lcd(0x3F, 16, 2);
+/////////////////////////////////////
+// Language settings
+/////////////////////////////////////
+#define LOC_RU 1
+#define LOC_EN 2
+#define LOCALE LOC_RU
+// Messages LED screen
+#if LOCALE == LOC_RU
+#define MSG_TEAM_IS "КОМАНДА "
+#define MSG_FLAG_IN_PROGRESS_CAPTURE "ЗАХВАТ ФЛАГА"
+#define MSG_FLAG_CAPTURED "ФЛАГ ЗАХВАЧЕН"
+#define MSG_END_OF_GAME "КОНЕЦ ИГРЫ"
+#elif LOCALE == LOC_EN
+#define MSG_TEAM_IS "Team is "
+#define MSG_FLAG_IN_PROGRESS_CAPTURE "Flag capturing"
+#define MSG_FLAG_CAPTURED "Flag captured"
+#define MSG_END_OF_GAME "End of game"
+#endif
+
 /////////////////////////////////////
 // Hardware settings
 /////////////////////////////////////
@@ -66,9 +91,6 @@ uint32_t blinkTm;
 #define CAPTURE_SCORE 15000      // тай-маут смены состояния, мс
 #define ROUND_TIME 3600000
 #define SCORE_SHOW_TIME 3000
-// Messages LED screen
-#define FLAG_IN_PROGRESS_CAPTURE "Flag capturing"
-#define FLAG_CAPTURED "Flag captured"
 
 
 uint32_t stateChangeTm;
@@ -111,6 +133,20 @@ void setup() {
     digitalWrite(RED_LED_PIN, LOW);
     digitalWrite(GREEN_LED_PIN, LOW);
     digitalWrite(BLUE_LED_PIN, LOW);
+
+    
+    digitalWrite(RED_LED_PIN, HIGH);
+    delay(500);
+    digitalWrite(RED_LED_PIN, LOW);
+    delay(500);
+    digitalWrite(GREEN_LED_PIN, HIGH);
+    delay(500);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    delay(500);
+    digitalWrite(BLUE_LED_PIN, HIGH);
+    delay(500);
+    digitalWrite(BLUE_LED_PIN, LOW);
+    delay(500);
     
     blinkStatus = 0;
     blinkTm = millis();
@@ -156,43 +192,7 @@ void checkButton(uint8_t buttonPin, uint8_t ledPin, bool *pState, bool *hold) {
 
 
 
-void digitalToggleFast(uint8_t pin) {
-  if (pin < 8) {
-    bitSet(PIND, pin);
-  } else if (pin < 14) {
-    bitSet(PINB, (pin - 8));
-  } else if (pin < 20) {
-    bitSet(PINC, (pin - 14));
-  }
-}
-
-void digitalWriteFast(uint8_t pin, bool x) {
-  // раскомментируй, чтобы отключать таймер
-  /*switch (pin) {
-    case 3: bitClear(TCCR2A, COM2B1);
-      break;
-    case 5: bitClear(TCCR0A, COM0B1);
-      break;
-    case 6: bitClear(TCCR0A, COM0A1);
-      break;
-    case 9: bitClear(TCCR1A, COM1A1);
-      break;
-    case 10: bitClear(TCCR1A, COM1B1);
-      break;
-    case 11: bitClear(TCCR2A, COM2A1);
-      break;
-  }*/
-
-  if (pin < 8) {
-    bitWrite(PORTD, pin, x);
-  } else if (pin < 14) {
-    bitWrite(PORTB, (pin - 8), x);
-  } else if (pin < 20) {
-    bitWrite(PORTC, (pin - 14), x);
-  }
-}
-
-void teamIdToString(uint8_t id) {
+const char* teamIdToString(uint8_t id) {
   switch (id) {
     case RED_TEAM:
       return "  RED";
@@ -214,6 +214,17 @@ uint8_t getTeamLedBit(uint8_t team) {
   }
 }
 
+uint8_t getTeamLedPin(uint8_t team) {
+  switch (team) {
+    case RED_TEAM:
+      return RED_LED_PIN;
+    case GREEN_TEAM:
+      return GREEN_LED_PIN;
+    case BLUE_TEAM:
+      return BLUE_LED_PIN;
+  }
+}
+
 uint8_t getTeamBtnPressed() {
   if (bRedState) {
     return RED_TEAM;
@@ -229,7 +240,7 @@ void loop() {
     if (millis() - roundTm >= ROUND_TIME) {
         lcd.home();
         lcd.clear();
-        lcd.print("End of game");
+        lcd.print(MSG_END_OF_GAME);
         delay(SCORE_SHOW_TIME);
         while(true) {
           // int teamId = RED_TEAЬ
@@ -243,20 +254,20 @@ void loop() {
           // delay(SCORE_SHOW_TIME);
           
           lcd.setCursor(0, 1);
-          lcd.print("Team   КУВ:              ");
+          lcd.print("Team   RED:              ");
           lcd.setCursor(12, 1);
-          lcd.print(teamRedScore);
+          lcd.print(teamRedScore, DEC);
           delay(SCORE_SHOW_TIME);
           
           lcd.setCursor(0, 1);
           lcd.print("Team GREEN:              ");
           lcd.setCursor(12, 1);
-          lcd.print(teamGreenScore);
+          lcd.print(teamGreenScore, DEC);
           delay(SCORE_SHOW_TIME);
           lcd.setCursor(0, 1);
           lcd.print("Team  BLUE:              ");
           lcd.setCursor(12, 1);
-          lcd.print(teamBlueScore);
+          lcd.print(teamBlueScore, DEC);
           delay(SCORE_SHOW_TIME);
         }
         return;
@@ -293,19 +304,19 @@ void loop() {
           state = SET_CAPTURE;
           currTeam = RED_TEAM;
           SET_BLINK_STATUS(blinkStatus, RED_BIT);
-        lcd.print(FLAG_IN_PROGRESS_CAPTURE);
+        lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
         } else if (!bRedHold && bGreenHold && !bBlueHold)
         {
           state = SET_CAPTURE;
           currTeam = GREEN_TEAM;
           SET_BLINK_STATUS(blinkStatus, GREEN_BIT);
-          lcd.print(FLAG_IN_PROGRESS_CAPTURE);
+          lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
         } else if (!bRedHold && !bGreenHold && bBlueHold)
         {
           state = SET_CAPTURE;
           currTeam = BLUE_TEAM;
           SET_BLINK_STATUS(blinkStatus, BLUE_BIT);
-          lcd.print(FLAG_IN_PROGRESS_CAPTURE);
+          lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
         } // else blink error led TODO
         break;
       case SET_CAPTURE:  // we need to check if button is still captured
@@ -321,9 +332,11 @@ void loop() {
                 RESET_BLINK_STATUS(blinkStatus, RED_BIT);
                 digitalWriteFast(RED_LED_PIN, HIGH);
                 lcd.home();
-                lcd.print(FLAG_CAPTURED);
+                lcd.clear();
+                lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
-                lcd.print("Team is " + (currTeam + 49));
+                lcd.print(MSG_TEAM_IS);
+                lcd.print(teamIdToString(currTeam));
                 state = CAPTURED;
                 stateTm = millis();
               }
@@ -340,9 +353,11 @@ void loop() {
                 RESET_BLINK_STATUS(blinkStatus, GREEN_BIT);
                 digitalWriteFast(GREEN_LED_PIN, HIGH);
                 lcd.home();
-                lcd.print(FLAG_CAPTURED);
+                lcd.clear();
+                lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
-                lcd.print("Team is " + (currTeam + 49));
+                lcd.print(MSG_TEAM_IS);
+                lcd.print(teamIdToString(currTeam));
                 state = CAPTURED;
                 stateTm = millis();
               }
@@ -359,9 +374,11 @@ void loop() {
                 RESET_BLINK_STATUS(blinkStatus, BLUE_BIT);
                 digitalWriteFast(BLUE_LED_PIN, HIGH);
                 lcd.home();
-                lcd.print(FLAG_CAPTURED);
+                lcd.clear();
+                lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
-                lcd.print("Team is " + (currTeam + 49));
+                lcd.print(MSG_TEAM_IS);
+                lcd.print(teamIdToString(currTeam));
                 state = CAPTURED;
                 stateTm = millis();
               }
@@ -429,46 +446,55 @@ void loop() {
           state = RESET_CAPTURE;
           stateChangeTm = millis();
           lcd.home();
+          lcd.clear();
           lcd.print("Flag resetting");
         } else {
+          digitalWriteFast(getTeamLedPin(currTeam), HIGH);
+          lcd.home();
+          lcd.print(MSG_FLAG_CAPTURED);
+          lcd.print("  ");
           if (millis() - stateTm >= CAPTURE_SCORE) {
             stateTm += CAPTURE_SCORE;
             switch(currTeam) {
              case RED_TEAM:
                 teamRedScore += 1;
                 digitalWriteFast(RED_LED_PIN, LOW);
+                digitalWriteFast(GREEN_LED_PIN, LOW);
+                digitalWriteFast(BLUE_LED_PIN, LOW);
                 delay(300);
                 digitalWriteFast(RED_LED_PIN, HIGH);
                 lcd.setCursor(0, 1);
                 lcd.print("Team RED:              ");
                 lcd.setCursor(12, 1);
-                lcd.print(teamRedScore);
+                lcd.print(teamRedScore, DEC);
                 break;
               case GREEN_TEAM:
                 teamGreenScore += 1;
+                digitalWriteFast(RED_LED_PIN, LOW);
                 digitalWriteFast(GREEN_LED_PIN, LOW);
+                digitalWriteFast(BLUE_LED_PIN, LOW);
                 delay(300);
                 digitalWriteFast(GREEN_LED_PIN, HIGH);
                 lcd.setCursor(0, 1);
                 lcd.print("Team GREEN:       ");
                 lcd.setCursor(12, 1);
-                lcd.print(teamGreenScore);
+                lcd.print(teamGreenScore, DEC);
                 break;
               case BLUE_TEAM:
                 teamBlueScore += 1;
+                digitalWriteFast(RED_LED_PIN, LOW);
+                digitalWriteFast(GREEN_LED_PIN, LOW);
                 digitalWriteFast(BLUE_LED_PIN, LOW);
                 delay(300);
                 digitalWriteFast(BLUE_LED_PIN, HIGH);
                 lcd.setCursor(0, 1);
                 lcd.print("Team BLUE:       ");
                 lcd.setCursor(12, 1);
-                lcd.print(teamBlueScore);
+                lcd.print(teamBlueScore, DEC);
                 break;
              }
           }
         }
         break;
     }
-
-    delay(70);
 }
