@@ -14,16 +14,25 @@ LCD_1602_RUS lcd(0x3F, 16, 2);
 #define LOCALE LOC_RU
 // Messages LED screen
 #if LOCALE == LOC_RU
-#define MSG_TEAM_IS "КОМАНДА "
+#define MSG_TEAM_RED "КРАСН"
+#define MSG_TEAM_GREEN "ЗЕЛЕН"
+#define MSG_TEAM_BLUE "СИНИЕ"
+#define MSG_TEAM "КОМАНДА "
 #define MSG_FLAG_IN_PROGRESS_CAPTURE "ЗАХВАТ ФЛАГА"
 #define MSG_FLAG_CAPTURED "ФЛАГ ЗАХВАЧЕН"
+#define MSG_FLAG_RESET "ПЕРЕХВАТ ФЛАГА"
 #define MSG_END_OF_GAME "КОНЕЦ ИГРЫ"
 #elif LOCALE == LOC_EN
-#define MSG_TEAM_IS "Team is "
+#define MSG_TEAM_RED "  RED"
+#define MSG_TEAM_GREEN "GREEN"
+#define MSG_TEAM_BLUE " BLUE"
+#define MSG_TEAM " Team  "
 #define MSG_FLAG_IN_PROGRESS_CAPTURE "Flag capturing"
 #define MSG_FLAG_CAPTURED "Flag captured"
+#define MSG_FLAG_RESET "Flag resetting"
 #define MSG_END_OF_GAME "End of game"
 #endif
+#define MSG_TEAM_CLEAR_SCORE ":              "
 
 /////////////////////////////////////
 // Hardware settings
@@ -87,9 +96,9 @@ uint32_t blinkTm;
 #define SET_CAPTURE 3
 #define END_GAME 4
 // Timers
-#define CAPTURE_CHANGE_TIME 10000      // тай-маут смены состояния, мс
-#define CAPTURE_SCORE 15000      // тай-маут смены состояния, мс
-#define ROUND_TIME 3600000
+#define CAPTURE_CHANGE_TIME 10000 // 10s, тай-маут смены состояния, мс
+#define CAPTURE_SCORE 15000       // 15s, тай-маут начисления очков, мс
+#define ROUND_TIME 3600000        // 1h, тай-маут игры, мс
 #define SCORE_SHOW_TIME 3000
 
 
@@ -105,11 +114,11 @@ uint16_t teamGreenScore;
 uint16_t teamBlueScore;
 
 struct TeamCfg {
-  uint8_t Id;
-  uint8_t Score;
-  uint8_t led_pin;
-  uint8_t led_blink_bit;
-  uint8_t button_pin;
+  uint8_t  Id;
+  uint16_t Score;
+  uint8_t  led_pin;
+  uint8_t  button_pin;
+  uint8_t  led_blink_bit;
 };
 
 TeamCfg teams[3];
@@ -174,9 +183,10 @@ void checkButton(uint8_t buttonPin, uint8_t ledPin, bool *pState, bool *hold) {
         needTmUpdate = true;
         *pState = state;
         *hold = false;   // сброс флага удержания
-        if (state) Serial.println("Кнопка нажата " + buttonPin);
-        else  {
-          Serial.println("Кнопка отпущена " + buttonPin);
+        //if (state) Serial.println("Кнопка нажата " + buttonPin);
+        //else  {
+          if (!state) {
+          //Serial.println("Кнопка отпущена " + buttonPin);
           digitalWrite(ledPin, LOW);
         }
     }
@@ -184,7 +194,7 @@ void checkButton(uint8_t buttonPin, uint8_t ledPin, bool *pState, bool *hold) {
     // кнопка удерживается дольше 500 мс
     if (*pState && !*hold && millis() - btnTm >= BTN_HOLD) {
         *hold = true;    // флаг удержания
-        Serial.println("Кнопка удержана");
+        //Serial.println("Кнопка удержана");
     }
 
 
@@ -195,11 +205,11 @@ void checkButton(uint8_t buttonPin, uint8_t ledPin, bool *pState, bool *hold) {
 const char* teamIdToString(uint8_t id) {
   switch (id) {
     case RED_TEAM:
-      return "  RED";
+      return MSG_TEAM_RED;
     case GREEN_TEAM:
-      return "GREEN";
+      return MSG_TEAM_GREEN;
     case BLUE_TEAM:
-      return " BLUE";
+      return MSG_TEAM_BLUE;
   }
 }
 
@@ -243,29 +253,26 @@ void loop() {
         lcd.print(MSG_END_OF_GAME);
         delay(SCORE_SHOW_TIME);
         while(true) {
-          // int teamId = RED_TEAЬ
-          // lcd.setCursor(0, 1);
-          // lcd.print("Team ");
-          // lcd.print(teamIdToString(teamId));
-          // lcd.print(":              ");
-          // lcd.setCursor(12, 1);
-          // lcd.print(teamRedScore);
-          // teamId++;
-          // delay(SCORE_SHOW_TIME);
-          
           lcd.setCursor(0, 1);
-          lcd.print("Team   RED:              ");
+          lcd.print(MSG_TEAM);
+          lcd.print(MSG_TEAM_RED);
+          lcd.print(MSG_TEAM_CLEAR_SCORE);
           lcd.setCursor(12, 1);
           lcd.print(teamRedScore, DEC);
           delay(SCORE_SHOW_TIME);
           
           lcd.setCursor(0, 1);
-          lcd.print("Team GREEN:              ");
+          lcd.print(MSG_TEAM);
+          lcd.print(MSG_TEAM_GREEN);
+          lcd.print(MSG_TEAM_CLEAR_SCORE);
           lcd.setCursor(12, 1);
           lcd.print(teamGreenScore, DEC);
           delay(SCORE_SHOW_TIME);
+          
           lcd.setCursor(0, 1);
-          lcd.print("Team  BLUE:              ");
+          lcd.print(MSG_TEAM);
+          lcd.print(MSG_TEAM_BLUE);
+          lcd.print(MSG_TEAM_CLEAR_SCORE);
           lcd.setCursor(12, 1);
           lcd.print(teamBlueScore, DEC);
           delay(SCORE_SHOW_TIME);
@@ -335,7 +342,7 @@ void loop() {
                 lcd.clear();
                 lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
-                lcd.print(MSG_TEAM_IS);
+                lcd.print(MSG_TEAM);
                 lcd.print(teamIdToString(currTeam));
                 state = CAPTURED;
                 stateTm = millis();
@@ -356,7 +363,7 @@ void loop() {
                 lcd.clear();
                 lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
-                lcd.print(MSG_TEAM_IS);
+                lcd.print(MSG_TEAM);
                 lcd.print(teamIdToString(currTeam));
                 state = CAPTURED;
                 stateTm = millis();
@@ -377,7 +384,7 @@ void loop() {
                 lcd.clear();
                 lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
-                lcd.print(MSG_TEAM_IS);
+                lcd.print(MSG_TEAM);
                 lcd.print(teamIdToString(currTeam));
                 state = CAPTURED;
                 stateTm = millis();
@@ -447,7 +454,7 @@ void loop() {
           stateChangeTm = millis();
           lcd.home();
           lcd.clear();
-          lcd.print("Flag resetting");
+          lcd.print(MSG_FLAG_RESET);
         } else {
           digitalWriteFast(getTeamLedPin(currTeam), HIGH);
           lcd.home();
@@ -455,40 +462,40 @@ void loop() {
           lcd.print("  ");
           if (millis() - stateTm >= CAPTURE_SCORE) {
             stateTm += CAPTURE_SCORE;
+            digitalWriteFast(RED_LED_PIN, LOW);
+            digitalWriteFast(GREEN_LED_PIN, LOW);
+            digitalWriteFast(BLUE_LED_PIN, LOW);
             switch(currTeam) {
              case RED_TEAM:
                 teamRedScore += 1;
-                digitalWriteFast(RED_LED_PIN, LOW);
-                digitalWriteFast(GREEN_LED_PIN, LOW);
-                digitalWriteFast(BLUE_LED_PIN, LOW);
                 delay(300);
                 digitalWriteFast(RED_LED_PIN, HIGH);
                 lcd.setCursor(0, 1);
-                lcd.print("Team RED:              ");
+                lcd.print(MSG_TEAM);
+                lcd.print(MSG_TEAM_RED);
+                lcd.print(MSG_TEAM_CLEAR_SCORE);
                 lcd.setCursor(12, 1);
                 lcd.print(teamRedScore, DEC);
                 break;
               case GREEN_TEAM:
                 teamGreenScore += 1;
-                digitalWriteFast(RED_LED_PIN, LOW);
-                digitalWriteFast(GREEN_LED_PIN, LOW);
-                digitalWriteFast(BLUE_LED_PIN, LOW);
                 delay(300);
                 digitalWriteFast(GREEN_LED_PIN, HIGH);
                 lcd.setCursor(0, 1);
-                lcd.print("Team GREEN:       ");
+                lcd.print(MSG_TEAM);
+                lcd.print(MSG_TEAM_GREEN);
+                lcd.print(MSG_TEAM_CLEAR_SCORE);
                 lcd.setCursor(12, 1);
                 lcd.print(teamGreenScore, DEC);
                 break;
               case BLUE_TEAM:
                 teamBlueScore += 1;
-                digitalWriteFast(RED_LED_PIN, LOW);
-                digitalWriteFast(GREEN_LED_PIN, LOW);
-                digitalWriteFast(BLUE_LED_PIN, LOW);
                 delay(300);
                 digitalWriteFast(BLUE_LED_PIN, HIGH);
                 lcd.setCursor(0, 1);
-                lcd.print("Team BLUE:       ");
+                lcd.print(MSG_TEAM);
+                lcd.print(MSG_TEAM_BLUE);
+                lcd.print(MSG_TEAM_CLEAR_SCORE);
                 lcd.setCursor(12, 1);
                 lcd.print(teamBlueScore, DEC);
                 break;
