@@ -2,7 +2,7 @@
 #define _LCD_TYPE 1
 #include <LCD_1602_RUS_ALL.h>
 #include <font_LCD_1602_RUS.h>
-LCD_1602_RUS lcd(0x3F, 16, 2);
+LCD_1602_RUS lczd(0x3F, 2, 16);
 
 //#include <LiquidCrystal_I2C.h>
 //LiquidCrystal_I2C lcd(0x3F, 16, 2);
@@ -11,13 +11,13 @@ LCD_1602_RUS lcd(0x3F, 16, 2);
 /////////////////////////////////////
 #define LOC_RU 1
 #define LOC_EN 2
-#define LOCALE LOC_RU
+#define LOCALE LOC_EN
 // Messages LED screen
 #if LOCALE == LOC_RU
 #define MSG_TEAM_RED "КРАСН"
 #define MSG_TEAM_GREEN "ЗЕЛЕН"
 #define MSG_TEAM_BLUE "СИНИЕ"
-#define MSG_TEAM "КОМАНДА "
+#define MSG_TEAM "КОМ "
 #define MSG_FLAG_IN_PROGRESS_CAPTURE "ЗАХВАТ ФЛАГА"
 #define MSG_FLAG_CAPTURED "ФЛАГ ЗАХВАЧЕН"
 #define MSG_FLAG_RESET "ПЕРЕХВАТ ФЛАГА"
@@ -26,7 +26,7 @@ LCD_1602_RUS lcd(0x3F, 16, 2);
 #define MSG_TEAM_RED "  RED"
 #define MSG_TEAM_GREEN "GREEN"
 #define MSG_TEAM_BLUE " BLUE"
-#define MSG_TEAM " Team  "
+#define MSG_TEAM "Team "
 #define MSG_FLAG_IN_PROGRESS_CAPTURE "Flag capturing"
 #define MSG_FLAG_CAPTURED "Flag captured"
 #define MSG_FLAG_RESET "Flag resetting"
@@ -340,6 +340,7 @@ void loop() {
                 digitalWriteFast(RED_LED_PIN, HIGH);
                 lcd.home();
                 lcd.clear();
+                lcd.setCursor(0, 0);  // столбец 0 строка 1
                 lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
                 lcd.print(MSG_TEAM);
@@ -361,6 +362,7 @@ void loop() {
                 digitalWriteFast(GREEN_LED_PIN, HIGH);
                 lcd.home();
                 lcd.clear();
+                lcd.setCursor(0, 0);  // столбец 0 строка 1
                 lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
                 lcd.print(MSG_TEAM);
@@ -382,6 +384,7 @@ void loop() {
                 digitalWriteFast(BLUE_LED_PIN, HIGH);
                 lcd.home();
                 lcd.clear();
+                lcd.setCursor(0, 0);  // столбец 0 строка 1
                 lcd.print(MSG_FLAG_CAPTURED);
                 lcd.setCursor(0, 1);  // столбец 0 строка 1
                 lcd.print(MSG_TEAM);
@@ -452,8 +455,8 @@ void loop() {
           currTeam = getTeamBtnPressed();
           state = RESET_CAPTURE;
           stateChangeTm = millis();
-          lcd.home();
           lcd.clear();
+          lcd.setCursor(0, 0);  // столбец 0 строка 1
           lcd.print(MSG_FLAG_RESET);
         } else {
           digitalWriteFast(getTeamLedPin(currTeam), HIGH);
