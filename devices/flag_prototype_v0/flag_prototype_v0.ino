@@ -1,11 +1,12 @@
-#include "FastUtils.h"
-#define _LCD_TYPE 1
-#include <LCD_1602_RUS_ALL.h>
-#include <font_LCD_1602_RUS.h>
-LCD_1602_RUS lczd(0x3F, 2, 16);
 
-//#include <LiquidCrystal_I2C.h>
-//LiquidCrystal_I2C lcd(0x3F, 16, 2);
+#include "airsoftAll.h"
+// #define _LCD_TYPE 1
+// #include <LCD_1602_RUS_ALL.h>
+// #include <font_LCD_1602_RUS.h>
+// LCD_1602_RUS lcd(0x3F, 2, 16);
+
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x3F, 16, 2);
 /////////////////////////////////////
 // Language settings
 /////////////////////////////////////
@@ -18,32 +19,33 @@ LCD_1602_RUS lczd(0x3F, 2, 16);
 #define MSG_TEAM_GREEN "ЗЕЛЕН"
 #define MSG_TEAM_BLUE "СИНИЕ"
 #define MSG_TEAM "КОМ "
+#define MSG_FLAG_EMPTY "СВОБОДНЫЙ ФЛАГ"
 #define MSG_FLAG_IN_PROGRESS_CAPTURE "ЗАХВАТ ФЛАГА"
 #define MSG_FLAG_CAPTURED "ФЛАГ ЗАХВАЧЕН"
 #define MSG_FLAG_RESET "ПЕРЕХВАТ ФЛАГА"
 #define MSG_END_OF_GAME "КОНЕЦ ИГРЫ"
+#define MSG_INIT_GAME_SETTINGS "Init game"
 #elif LOCALE == LOC_EN
 #define MSG_TEAM_RED "  RED"
 #define MSG_TEAM_GREEN "GREEN"
 #define MSG_TEAM_BLUE " BLUE"
 #define MSG_TEAM "Team "
+#define MSG_FLAG_EMPTY "Empty Flag     "
 #define MSG_FLAG_IN_PROGRESS_CAPTURE "Flag capturing"
 #define MSG_FLAG_CAPTURED "Flag captured"
 #define MSG_FLAG_RESET "Flag resetting"
 #define MSG_END_OF_GAME "End of game"
+#define MSG_INIT_GAME_SETTINGS "Init game"
 #endif
 #define MSG_TEAM_CLEAR_SCORE ":              "
 
 /////////////////////////////////////
 // Hardware settings
 /////////////////////////////////////
-#define RED_BUTTON_PIN 10
-#define GREEN_BUTTON_PIN 11
-#define BLUE_BUTTON_PIN 12
+#define RED_BUTTON_PIN 6
+#define GREEN_BUTTON_PIN 10
+#define BLUE_BUTTON_PIN 8
 
-// Button work
-#define BTN_DEB 50      // тай-маут смены состояния, мс
-#define BTN_HOLD 500    // тай-маут удержания, мс
 
 uint32_t btnTm;
 bool needTmUpdate = false;
@@ -55,9 +57,9 @@ bool bGreenHold = false;
 bool bBlueHold = false;
 
 // LED Indication
-#define RED_LED_PIN 3
-#define GREEN_LED_PIN 6
-#define BLUE_LED_PIN 7
+#define RED_LED_PIN 2
+#define GREEN_LED_PIN 3
+#define BLUE_LED_PIN 4
 
 #define BLINK_TIME_MS 500
 
@@ -98,7 +100,6 @@ uint32_t blinkTm;
 // Timers
 #define CAPTURE_CHANGE_TIME 10000 // 10s, тай-маут смены состояния, мс
 #define CAPTURE_SCORE 15000       // 15s, тай-маут начисления очков, мс
-#define ROUND_TIME 3600000        // 1h, тай-маут игры, мс
 #define SCORE_SHOW_TIME 3000
 
 
@@ -107,7 +108,8 @@ uint32_t stateTm;
 uint8_t prevTeam;
 uint8_t currTeam;
 uint8_t state;
-uint32_t roundTm;
+extern uint32_t roundDuration;
+extern uint32_t roundTimer;
 
 uint16_t teamRedScore;
 uint16_t teamGreenScore;
@@ -124,7 +126,7 @@ struct TeamCfg {
 TeamCfg teams[3];
 
 void setup() {
-    Serial.begin(115200);
+    // Serial.begin(115200);
 
     lcd.init();           // инициализация
     lcd.backlight();      // включить подсветку
@@ -156,17 +158,32 @@ void setup() {
     delay(500);
     digitalWrite(BLUE_LED_PIN, LOW);
     delay(500);
+
+    
+    digitalWriteFast(RED_LED_PIN, HIGH);
+    digitalWriteFast(GREEN_LED_PIN, HIGH);
+    digitalWriteFast(BLUE_LED_PIN, HIGH);
+    delay(500);
+    digitalWriteFast(RED_LED_PIN, LOW);
+    digitalWriteFast(GREEN_LED_PIN, LOW);
+    digitalWriteFast(BLUE_LED_PIN, LOW);
+    delay(500);
     
     blinkStatus = 0;
     blinkTm = millis();
     btnTm = millis();
     needTmUpdate = false;
 
+    // Start settings menu
+    readSettingsEEPROM();
+    lcd.setCursor(0, 0);
+    lcd.print(MSG_INIT_GAME_SETTINGS);
+    delay(2000);
+    HandleChooseTime(&lcd, RED_BUTTON_PIN, GREEN_BUTTON_PIN);
+    writeSettingsEEPROM();
+
     // Reset game state
-    stateChangeTm = millis();
     stateTm = millis();
-    roundTm = millis();
-    state = EMPTY;
     currTeam = NO_TEAM;
     prevTeam = NO_TEAM;
     teamRedScore = EMPTY;
@@ -175,18 +192,21 @@ void setup() {
 
     teams[RED_TEAM].Id = RED_TEAM;
     teams[RED_TEAM].Score = EMPTY;
+    
+    InitRound();
+    GameToEmptyState();
 }
 
 void checkButton(uint8_t buttonPin, uint8_t ledPin, bool *pState, bool *hold) {
-    bool state = !digitalRead(buttonPin);
+    bool state = digitalRead(buttonPin);
     if (*pState != state && millis() - btnTm >= BTN_DEB) {
         needTmUpdate = true;
         *pState = state;
         *hold = false;   // сброс флага удержания
-        //if (state) Serial.println("Кнопка нажата " + buttonPin);
-        //else  {
-          if (!state) {
-          //Serial.println("Кнопка отпущена " + buttonPin);
+        // if (state) Serial.println("Кнопка нажата " + buttonPin);
+        // else  {
+        if (!state) {
+          Serial.println("Кнопка отпущена " + buttonPin);
           digitalWrite(ledPin, LOW);
         }
     }
@@ -245,9 +265,20 @@ uint8_t getTeamBtnPressed() {
   }
 }
 
+void GameToEmptyState() {
+  state = EMPTY;
+  stateChangeTm = millis();
+  lcd.home();
+  lcd.clear();
+  lcd.print(MSG_FLAG_EMPTY);
+  digitalWriteFast(RED_LED_PIN, LOW);
+  digitalWriteFast(GREEN_LED_PIN, LOW);
+  digitalWriteFast(BLUE_LED_PIN, LOW);
+}
+
 void loop() {
     // Detect end of round
-    if (millis() - roundTm >= ROUND_TIME) {
+    if (IsRoundEnd()) {
         lcd.home();
         lcd.clear();
         lcd.print(MSG_END_OF_GAME);
@@ -304,25 +335,26 @@ void loop() {
 
     switch(state) {
       case EMPTY:  // we need if somebody pressed button to start capture
-        lcd.home();
-        lcd.clear();   
         if (bRedHold && !bGreenHold && !bBlueHold)
         {
           state = SET_CAPTURE;
           currTeam = RED_TEAM;
           SET_BLINK_STATUS(blinkStatus, RED_BIT);
-        lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
+          lcd.clear();   
+          lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
         } else if (!bRedHold && bGreenHold && !bBlueHold)
         {
           state = SET_CAPTURE;
           currTeam = GREEN_TEAM;
           SET_BLINK_STATUS(blinkStatus, GREEN_BIT);
+          lcd.clear();   
           lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
         } else if (!bRedHold && !bGreenHold && bBlueHold)
         {
           state = SET_CAPTURE;
           currTeam = BLUE_TEAM;
           SET_BLINK_STATUS(blinkStatus, BLUE_BIT);
+          lcd.clear();   
           lcd.print(MSG_FLAG_IN_PROGRESS_CAPTURE);
         } // else blink error led TODO
         break;
@@ -331,8 +363,7 @@ void loop() {
           case RED_TEAM:
             if (!bRedState) {
               RESET_BLINK_STATUS(blinkStatus, RED_BIT);
-              state = EMPTY;
-              stateChangeTm = millis();
+              GameToEmptyState();
             } else {
               if (millis() - stateChangeTm >= CAPTURE_CHANGE_TIME) {
                 stateChangeTm += CAPTURE_CHANGE_TIME;
@@ -353,8 +384,7 @@ void loop() {
           case GREEN_TEAM:
             if (!bGreenState) {
               RESET_BLINK_STATUS(blinkStatus, GREEN_BIT);
-              state = EMPTY;
-              stateChangeTm = millis();
+              GameToEmptyState();
             } else {
               if (millis() - stateChangeTm >= CAPTURE_CHANGE_TIME) {
                 stateChangeTm += CAPTURE_CHANGE_TIME;
@@ -375,8 +405,7 @@ void loop() {
           case BLUE_TEAM:
             if (!bBlueState) {
               RESET_BLINK_STATUS(blinkStatus, BLUE_BIT);
-              state = EMPTY;
-              stateChangeTm = millis();
+              GameToEmptyState();
             } else {
               if (millis() - stateChangeTm >= CAPTURE_CHANGE_TIME) {
                 stateChangeTm += CAPTURE_CHANGE_TIME;
@@ -395,8 +424,7 @@ void loop() {
             }
             break;
           default:
-            state = EMPTY;
-            stateChangeTm = millis();
+            GameToEmptyState();
             break;
         }
         break;
@@ -408,6 +436,9 @@ void loop() {
               if (millis() - stateChangeTm >= CAPTURE_CHANGE_TIME) {
                 stateChangeTm += CAPTURE_CHANGE_TIME;
                 state = EMPTY;
+                lcd.home();
+                lcd.clear();
+                lcd.print(MSG_FLAG_EMPTY);
                 RESET_BLINK_STATUS(blinkStatus, getTeamLedBit(prevTeam));
               }
             } else {
@@ -422,6 +453,9 @@ void loop() {
               if (millis() - stateChangeTm >= CAPTURE_CHANGE_TIME) {
                 stateChangeTm += CAPTURE_CHANGE_TIME;
                 state = EMPTY;
+                lcd.home();
+                lcd.clear();
+                lcd.print(MSG_FLAG_EMPTY);
                 RESET_BLINK_STATUS(blinkStatus, getTeamLedBit(prevTeam));
               }
             } else {
@@ -436,6 +470,9 @@ void loop() {
               if (millis() - stateChangeTm >= CAPTURE_CHANGE_TIME) {
                 stateChangeTm += CAPTURE_CHANGE_TIME;
                 state = EMPTY;
+                lcd.home();
+                lcd.clear();
+                lcd.print(MSG_FLAG_EMPTY);
                 RESET_BLINK_STATUS(blinkStatus, getTeamLedBit(prevTeam));
               }
             } else {
